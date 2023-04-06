@@ -1,0 +1,63 @@
+const express = require('express');
+const session = require('express-session');
+const passport = require('passport');
+const TwitterStrategy = require('passport-twitter').Strategy;
+const axios = require('axios');
+const cron = require('node-cron');
+
+const TWITTER_CONSUMER_KEY = 'YOUR_CONSUMER_KEY';
+const TWITTER_CONSUMER_SECRET = 'YOUR_CONSUMER_SECRET';
+
+passport.use(new TwitterStrategy({
+    consumerKey: TWITTER_CONSUMER_KEY,
+    consumerSecret: TWITTER_CONSUMER_SECRET,
+    callbackURL: 'http://localhost:3000/auth/twitter/callback'
+  },
+  function(token, tokenSecret, profile, cb) {
+    // save token and tokenSecret to session
+    cb(null, profile);
+  }
+));
+
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+  done(null, obj);
+});
+
+const app = express();
+
+app.use(session({ secret: 'your_secret_key' }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.get('/auth/twitter', passport.authenticate('twitter'));
+
+app.get('/auth/twitter/callback',
+  passport.authenticate('twitter', { failureRedirect: '/login' }),
+  function(req, res) {
+    axios.get('https://pixels-data.xyz/twitter', {
+      headers: {
+        Authorization: `Bearer ${req.user.token}`,
+        TokenSecret: req.user.tokenSecret
+      }
+    })
+    .then(response => {
+      if (response.status === 200) {
+        res.send('Completion message');
+      }
+    })
+    .catch(error => {
+      console.error(error);
+    });
+  });
+
+const scraper = () => {
+  // write your scraper logic here
+}
+
+cron.schedule('*/15 * * * *', scraper);
+
+app.listen(3000, () => console.log('Server running on port 3000'));
